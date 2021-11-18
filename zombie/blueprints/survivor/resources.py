@@ -97,6 +97,30 @@ class Survivors(Resource):
             return {"message": survivor_not_found.format(survivor_name)}, 404
         return survivor_schema.dump(survivor), 200
 
+    @classmethod
+    def put(cls,):
+        """
+        Update survivor location
+        A survivor must have the ability to update their last location, storing the new 
+        latitude/longitude pair in the base (no need to track locations, just replacing 
+        the previous one is enough).
+        """
+        data = request.get_json() if request.get_json() else dict(request.form)
+        if not data:
+            data = dict(request.args)
+
+        if not data.get("name"):
+            return {"message": blank_error.format("name")}, 400
+
+        survivor_name = data["name"]
+
+        survivor = SurvivorModel.find_by_identity(survivor_name)
+        if not survivor:
+            return {"message": survivor_not_found.format(survivor_name)}, 404
+
+        survivor.update_activity_tracking(request.remote_addr)
+
+        return survivor_schema.dump(survivor), 200
 
     @classmethod
     def delete(cls,):
