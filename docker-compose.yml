@@ -1,0 +1,14 @@
+version: '3.6'
+
+services:
+  website:
+    build: 
+      context: .
+    command: gunicorn -c python:config.gunicorn --reload zombie.app:app
+    env_file:
+      - '.env'
+    volumes:
+      - '.:/zombie'
+    ports:
+      - '5000:5000'
+
