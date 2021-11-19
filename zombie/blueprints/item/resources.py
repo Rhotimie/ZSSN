@@ -3,6 +3,7 @@ from flask_restful import Resource, reqparse
 from marshmallow import ValidationError, EXCLUDE
 from zombie.blueprints.item.models import ItemModel
 from zombie.blueprints.item.schemas import ItemSchema
+from zombie.blueprints.survivoritem.models import SurvivorItemModel
 
 
 item_schema = ItemSchema(unknown=EXCLUDE)
@@ -74,7 +75,11 @@ class Item(Resource):
         name = data["name"]
 
         item = ItemModel.find_by_name(name)
+
         if item:
+            survivor_items = SurvivorItemModel.find_by_item_id(item.id)
+            SurvivorItemModel.bulk_delete([item.id for item in survivor_items])
+
             item.delete_from_db()
             return {"message": item_deleted}
         return {"message": item_not_found}, 404

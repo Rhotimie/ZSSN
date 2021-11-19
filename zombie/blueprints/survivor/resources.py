@@ -4,6 +4,7 @@ from werkzeug.security import safe_str_cmp
 from flask import request
 from flask_restful import Resource, reqparse
 from marshmallow import EXCLUDE
+from zombie.blueprints.item.models import ItemModel
 from zombie.blueprints.survivor.models import SurvivorModel
 from zombie.blueprints.survivor.schemas import SurvivorSchema
 from zombie.blueprints.survivoritem.models import SurvivorItemModel
@@ -30,6 +31,7 @@ trader_is_infected = "Trader with name: {} is infected, hence you can not trade"
 unposessed_trader_items = "Trader with name: {} does not have the following items: {}"
 imbalanced_trader_items = "The traders items are not balanced"
 low_quantity_trader_items = "Trader with name: {} has lower quantity: {} of item with id: {} compared to the intended quantity for trade"
+invalid_item_id = "item with id: {} does not exist"
 
 
 class SurvivorRegister(Resource):
@@ -63,11 +65,27 @@ class SurvivorRegister(Resource):
             SurvivorRegister.parser.parse_args()
         )  # name + age + list of item ids  [1, 2, 3, 5, 5, 5]
 
+        required_fields = ["name", "age", "gender"]
+        for field in required_fields:
+            if not data.get(field):
+                return {
+                    "message": {
+                        field: f"'{field}' field cannot be blank. please specify this field"
+                    }
+                }
 
-        item_id_quantities = Counter(data["item_ids"])
+        item_ids = data.get("item_ids", [])
         name = data["name"]
         age = data["age"]
         gender = data["gender"]
+
+        item_id_quantities = Counter(item_ids)
+
+        available_item_ids = ItemModel.find_table_ids()
+
+        for k in item_id_quantities:
+            v = int(k)
+            if v not in available_item_ids: return {"message": invalid_item_id.format(v)}, 404
 
         survivor_json = {"name": name, "age": age, "gender": gender}
 
@@ -83,8 +101,8 @@ class SurvivorRegister(Resource):
         try:
             survivor.update_activity_tracking(request.remote_addr)
             survivor.save_to_db()
-            SurvivorItemModel.save_survivor_items(survivor.id, item_id_quantities)
-            return {"message": survivor_registered}, 201
+            if item_ids: SurvivorItemModel.save_survivor_items(survivor.id, item_id_quantities)
+            return survivor_schema.dump(survivor), 201
         except:
             survivor.delete_from_db()
             traceback.print_exc()
@@ -160,6 +178,8 @@ class Survivors(Resource):
         if survivor.is_infected:
             return {"message": infected_survivor}, 400
 
+        survivor_items = SurvivorItemModel.find_by_survivor_id(survivor.id)
+        SurvivorItemModel.bulk_delete([item.id for item in survivor_items])
         survivor.delete_from_db()
 
         return {"message": survivor_deleted}, 200

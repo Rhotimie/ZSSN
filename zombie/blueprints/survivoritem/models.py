@@ -98,3 +98,4 @@ class SurvivorItemModel(ResourceMixin, db.Model):
             )    
         return None
 
+

@@ -184,6 +184,16 @@ class ResourceMixin(object):
         """
         return cls.query.filter(func.DATE(cls.updated_on) == _date).all()
 
+    @classmethod
+    def find_table_ids(cls,):
+        """
+        Find a model instance by date modified.
+
+        :return: Model instance
+        """
+        unique_ids = db.session.query(cls.id).distinct().all()
+        return [x[0] for x in unique_ids]
+
     def save_to_db(self):
         """
         Save a model instance.
@@ -264,7 +274,6 @@ class ResourceMixin(object):
     def to_dict(self,):
         columns = self.__table__.columns.keys()
         return {key: getattr(self, key) for key in columns}
-
 
 
 
