@@ -6,7 +6,7 @@ from zombie.blueprints.survivor.models import SurvivorModel
 class SurvivorSchema(ma.ModelSchema):
     class Meta:
         model = SurvivorModel
-        dump_only = ("id",)
+        dump_only = ("id", "survivor_items")
 
         @pre_dump
         def _pre_dump(self, survivor: SurvivorModel):

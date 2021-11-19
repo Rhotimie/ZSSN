@@ -11,6 +11,11 @@ from zombie.blueprints.survivor.resources import (
 from zombie.blueprints.item.resources import Item, ItemList
 from zombie.blueprints.survivoritem.resources import SurvivorItem
 
+from zombie.blueprints.insights.resources import (
+    InfectedSurvivorsPercent, NonInfectedSurvivorsPercent,
+    AverageResourcesBySurvivor, PointsLostToInfectedSurvivor
+)
+
 
 base_dir = os.getcwd()
 static_fold = os.path.join(base_dir, "zombie", "static")
@@ -34,4 +39,10 @@ rest_api.add_resource(Item, "/item")
 rest_api.add_resource(ItemList, "/items")
 rest_api.add_resource(FlagSurvivor, "/flag_survivor")
 rest_api.add_resource(TradeItems, "/trade")
+
+# insights API
+rest_api.add_resource(InfectedSurvivorsPercent, "/infected_survivors")
+rest_api.add_resource(NonInfectedSurvivorsPercent, "/uninfected_survivors")
+rest_api.add_resource(AverageResourcesBySurvivor, "/average_resource")
+rest_api.add_resource(PointsLostToInfectedSurvivor, "/pointsloss")
 
