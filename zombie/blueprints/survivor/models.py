@@ -54,10 +54,9 @@ class SurvivorModel(ResourceMixin, db.Model):
         """
         return "survivor name: {}, age: {}".format(self.name, self.age)
 
-
     @property
-    def all_items(self) -> "SurvivorItemModel":
-        return self.survivoritem.order_by(db.desc(SurvivorItemModel.id)).first()
+    def survivor_items_details(self,)-> "SurvivorItemModel":
+        return {item.item_id: item.json for item in self.survivor_items}
 
     @classmethod
     def find_by_identity(cls, identity):
@@ -102,4 +101,5 @@ class SurvivorModel(ResourceMixin, db.Model):
         if self.infection_flag_count >= 3:
             self.is_infected = True
         self.save_to_db()
+
 

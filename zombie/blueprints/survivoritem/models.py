@@ -27,6 +27,13 @@ class SurvivorItemModel(ResourceMixin, db.Model):
     def __repr__(self,):
         return "<survivor name: {}, item: {}, quantity: {}>".format(self.survivor_name, self.item_name, self.quantity,)
 
+    @property
+    def json(self,):
+        return {
+            "item": self.item_name,
+            "quantity": self.quantity,
+            "points": self.item_points
+        }
 
     @property
     def survivor_name(self,):
@@ -34,11 +41,11 @@ class SurvivorItemModel(ResourceMixin, db.Model):
 
     @property
     def item_name(self,) -> str:
-        return self.item.find_by_id(self.item_id).name
+        return self.item.name
 
     @property
     def item_points(self,) -> int:
-        return self.item.find_by_id(self.item_id).points
+        return self.item.points
 
     @classmethod
     def find_by_id(cls, _id: str) -> "SurvivorItemModel":

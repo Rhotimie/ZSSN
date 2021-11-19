@@ -1,5 +1,6 @@
 import traceback
 from collections import Counter
+from werkzeug.security import safe_str_cmp
 from flask import request
 from flask_restful import Resource, reqparse
 from marshmallow import EXCLUDE
@@ -16,7 +17,7 @@ blank_error = "'{}' field cannot be blank. please specify this field"
 survivor_not_found = "Survivor with name: {} does not exist"
 survivor_deleted = "Survivor with corresponding Items has been deleted."
 survivor_error_inserting= "An error occurred while inserting survivor."
-survivor_name_exists = "Survivor with name '{}' already exists."
+survivor_name_exists = "Survivor with name '{}' already registered with their assets declared."
 survivor_registered= "Survivor created successfully"
 infected_survivor= "You have been marked infected hence your record is not accessible"
 infection_flagger_error = "You can't flag another survivor because your detail is invalid"
@@ -24,6 +25,12 @@ infection_flagger_is_infected = "You can't flag another survivor because you are
 infected_survivor_already_marked= "The survivor has been marked infected already"
 survivor_already_flagged_by_you= "The survivor has already been flagged by you"
 self_flagging = "You are not allowed to flag yourself"
+self_trade = "Both buyer and seller can not have the same name"
+trader_is_infected = "Trader with name: {} is infected, hence you can not trade"
+unposessed_trader_items = "Trader with name: {} does not have the following items: {}"
+imbalanced_trader_items = "The traders items are not balanced"
+low_quantity_trader_items = "Trader with name: {} has lower quantity: {} of item with id: {} compared to the intended quantity for trade"
+
 
 class SurvivorRegister(Resource):
     parser = reqparse.RequestParser()
@@ -213,6 +220,110 @@ class FlagSurvivor(Resource):
         return survivor_schema.dump(survivor), 200
 
 
+class TradeItems(Resource):
+    @classmethod
+    def put(cls,):
+        data = request.get_json() if request.get_json() else dict(request.form)
+        if not data:
+            data = dict(request.args)
+
+        if not data.get("seller_name"):
+            return {"message": blank_error.format("seller_name")}, 400
+
+        if not data.get("buyer_name"):
+            return {"message": blank_error.format("buyer_name")}, 400
+
+        if not data.get("seller_item_ids"):
+            return {"message": blank_error.format("seller_item_ids")}, 400
+
+        if not data.get("buyer_item_ids"):
+            return {"message": blank_error.format("buyer_item_ids")}, 400
+
+        buyer_name = data["buyer_name"]
+        seller_name = data["seller_name"]
+
+        if safe_str_cmp(buyer_name, seller_name):
+            return {"message": self_trade}, 400
+
+        buyer = SurvivorModel.find_by_identity(buyer_name)
+        seller = SurvivorModel.find_by_identity(seller_name)
+
+        if not seller:
+            return {"message": survivor_not_found.format(seller_name)}, 404
+        if not buyer:
+            return {"message": survivor_not_found.format(buyer_name)}, 404
+
+
+        if seller.is_infected:
+            return {"message": trader_is_infected.format(seller_name)}, 400
+        if buyer.is_infected:
+            return {"message": trader_is_infected.format(buyer_name)}, 400
+
+        seller_item_ids = data["seller_item_ids"]
+        buyer_item_ids = data["buyer_item_ids"]
+
+        unposessed_buyer_items = [x for x in buyer_item_ids if x not in buyer.survivor_items_details]
+        unposessed_seller_items = [x for x in seller_item_ids if x not in seller.survivor_items_details]
+
+        if unposessed_buyer_items:
+            return {"message": unposessed_trader_items.format(buyer_name, unposessed_buyer_items)}, 404
+        if unposessed_seller_items:
+            return {"message": unposessed_trader_items.format(seller_name, unposessed_seller_items)}, 404
+
+        # verify total units
+        posessed_buyer_points = sum([buyer.survivor_items_details[x]["points"] for x in buyer_item_ids])
+        posessed_seller_points = sum([seller.survivor_items_details[x]["points"] for x in seller_item_ids])
+
+        if posessed_buyer_points != posessed_seller_points:
+            return {"message": imbalanced_trader_items}, 400
+
+        # verify item quantities intended for trade against trade
+        buyer_item_id_quantities = Counter(buyer_item_ids)
+        seller_item_id_quantities = Counter(seller_item_ids)  
+
+        for _id, count in seller_item_id_quantities.most_common():
+            stock = seller.survivor_items_details[_id]['quantity']
+            if stock < count:
+                return {"message": low_quantity_trader_items.format(seller_name, stock, _id, count)}, 404
+
+        for _id, count in buyer_item_id_quantities.most_common():
+            stock = buyer.survivor_items_details[_id]['quantity']
+            if stock < count:
+                return {"message": low_quantity_trader_items.format(buyer_name, stock, _id, count)}, 404
+
+        # initiate trade and process inventory
+        for _id, count in seller_item_id_quantities.most_common():
+            seller_item = SurvivorItemModel.find_by_item_id_survivor_id(_id, seller.id)
+            seller_item.quantity -= count
+            seller_item.save_to_db()
+
+            buyer_item = SurvivorItemModel.find_by_item_id_survivor_id(_id, buyer.id)
+            if buyer_item:
+                buyer_item.quantity += count 
+            else:
+                buyer_item = SurvivorItemModel(buyer.id, _id, quantity=count)
+            buyer_item.save_to_db()
+
+        for _id, count in buyer_item_id_quantities.most_common():
+            buyer_item = SurvivorItemModel.find_by_item_id_survivor_id(_id, buyer.id)
+            buyer_item.quantity -= count
+            buyer_item.save_to_db()
+
+            seller_item = SurvivorItemModel.find_by_item_id_survivor_id(_id, seller.id)
+            if seller_item:
+                seller_item.quantity += count 
+            else:
+                seller_item = SurvivorItemModel(seller.id, _id, quantity=count)
+            seller_item.save_to_db()
+
+        # update location and IP address
+        buyer.update_activity_tracking(request.remote_addr, True)
+        seller.update_activity_tracking(request.remote_addr, True)
+
+        return {
+            "seller": survivor_schema.dump(seller),
+            "buyer": survivor_schema.dump(buyer)
+        }, 200
 
 class SurvivorList(Resource):
     @classmethod

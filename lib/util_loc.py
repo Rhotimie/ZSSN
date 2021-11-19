@@ -32,7 +32,11 @@ def get_country_from_gpe_entity(entity):
 
 
 def ip_api(ip_address):
-    response = requests.get("http://ip-api.com/json/92.168.8.101")
+    try:
+        response = requests.get("http://ip-api.com/json/92.168.8.101")
+    except:
+        return {"lat": 48.1104, "lon": -1.65089}
+        
     if response.status_code == 200:
         data = response.json()
         return {"lat": data['lat'], "lon": data['lon']}

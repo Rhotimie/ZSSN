@@ -7,3 +7,6 @@ class SurvivorItemSchema(ma.ModelSchema):
         model = SurvivorItemModel
         dump_only = ("id",)
         include_fk = True
+
+
+
