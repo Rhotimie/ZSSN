@@ -18,7 +18,12 @@ survivor_deleted = "Survivor with corresponding Items has been deleted."
 survivor_error_inserting= "An error occurred while inserting survivor."
 survivor_name_exists = "Survivor with name '{}' already exists."
 survivor_registered= "Survivor created successfully"
-
+infected_survivor= "You have been marked infected hence your record is not accessible"
+infection_flagger_error = "You can't flag another survivor because your detail is invalid"
+infection_flagger_is_infected = "You can't flag another survivor because you are infected"
+infected_survivor_already_marked= "The survivor has been marked infected already"
+survivor_already_flagged_by_you= "The survivor has already been flagged by you"
+self_flagging = "You are not allowed to flag yourself"
 
 class SurvivorRegister(Resource):
     parser = reqparse.RequestParser()
@@ -95,6 +100,10 @@ class Survivors(Resource):
         survivor = SurvivorModel.find_by_identity(survivor_name)
         if not survivor:
             return {"message": survivor_not_found.format(survivor_name)}, 404
+
+        if survivor.is_infected:
+            return {"message": infected_survivor}, 400
+
         return survivor_schema.dump(survivor), 200
 
     @classmethod
@@ -118,6 +127,9 @@ class Survivors(Resource):
         if not survivor:
             return {"message": survivor_not_found.format(survivor_name)}, 404
 
+        if survivor.is_infected:
+            return {"message": infected_survivor}, 400
+
         survivor.update_activity_tracking(request.remote_addr)
 
         return survivor_schema.dump(survivor), 200
@@ -133,14 +145,73 @@ class Survivors(Resource):
 
         survivor_name = data["name"]
 
-        survivors = SurvivorModel.find_by_identity(survivor_name)
+        survivor = SurvivorModel.find_by_identity(survivor_name)
 
-        if not survivors:
+        if not survivor:
             return {"message": survivor_not_found.format(survivor_name)}, 404
 
-        survivors.delete_from_db()
+        if survivor.is_infected:
+            return {"message": infected_survivor}, 400
+
+        survivor.delete_from_db()
 
         return {"message": survivor_deleted}, 200
+
+class FlagSurvivor(Resource):
+    @classmethod
+    def put(cls,):
+        """
+            Flag survivor as infected
+            In a chaotic situation like that, it's inevitable that a survivor may get 
+            contaminated by the virus. When this happens, we need to flag the survivor as 
+            infected.
+            An infected survivor cannot trade with others, can't access/manipulate their 
+            inventory, nor be listed in the reports (infected people are kinda dead anyway, 
+            see the item on reports below).
+            A survivor is marked as infected when at least three other survivors 
+            report their contamination.
+            When a survivor is infected, their inventory items become inaccessible (they 
+            cannot trade with others).
+        """
+        data = request.get_json() if request.get_json() else dict(request.form)
+        if not data:
+            data = dict(request.args)
+
+        if not data.get("name"):
+            return {"message": blank_error.format("name")}, 400
+
+        if not data.get("survivor_id"):
+            return {"message": blank_error.format("survivor_id")}, 400
+
+        survivor_name = data["name"]
+        survivor_id = data["survivor_id"]
+
+        infection_flagger = SurvivorModel.find_by_id(survivor_id)
+        survivor = SurvivorModel.find_by_identity(survivor_name)
+
+        if not infection_flagger:
+            return {"message": infection_flagger_error}, 404
+
+        if not survivor:
+            return {"message": survivor_not_found.format(survivor_name)}, 404
+
+        if infection_flagger.is_infected:
+            return {"message": infection_flagger_is_infected}, 400
+
+        if survivor.is_infected:
+            return {"message": infected_survivor_already_marked}, 400
+
+        if survivor.id == infection_flagger.is_infected:
+            return {"message": self_flagging}, 400
+
+        if infection_flagger.id in survivor.survivor_flag_list:
+            return {"message": survivor_already_flagged_by_you}, 400
+
+        survivor.survivor_flag_list += [infection_flagger.id]
+        survivor.increase_infection_flag_count()
+
+        return survivor_schema.dump(survivor), 200
+
 
 
 class SurvivorList(Resource):

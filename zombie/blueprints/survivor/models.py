@@ -1,7 +1,8 @@
 from collections import OrderedDict
 from typing import Dict, List, Union
 from sqlalchemy import or_
-from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.ext.mutable import MutableDict, MutableList
+from sqlalchemy.dialects.postgresql import ARRAY
 from lib.util_sqlalchemy import ResourceMixin
 from zombie.extensions import db
 from zombie.blueprints.survivoritem.models import SurvivorItemModel
@@ -37,6 +38,8 @@ class SurvivorModel(ResourceMixin, db.Model):
 
     #track infected survivor
     is_infected = db.Column(db.Boolean(), nullable=False, server_default="0")
+    infection_flag_count = db.Column(db.Integer, nullable=False, default=0)
+    survivor_flag_list = db.Column(MutableList.as_mutable(ARRAY(db.Integer)), default=[])
 
     # Relationships.
     survivor_items = db.relationship(
@@ -75,7 +78,7 @@ class SurvivorModel(ResourceMixin, db.Model):
 
     @classmethod
     def find_all(cls) -> List["SurvivorModel"]:
-        return cls.query.all()
+        return cls.query.filter_by(is_infected=False).all()
 
     def update_activity_tracking(self, ip_address, is_trade=False):
         """
@@ -93,4 +96,10 @@ class SurvivorModel(ResourceMixin, db.Model):
         self.last_location = self.current_location
         self.current_location = ip_api(ip_address)
         if is_trade: self.save_to_db()
+
+    def increase_infection_flag_count(self,):
+        self.infection_flag_count += 1
+        if self.infection_flag_count >= 3:
+            self.is_infected = True
+        self.save_to_db()
 

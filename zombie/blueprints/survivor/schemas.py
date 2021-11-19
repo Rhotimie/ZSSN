@@ -1,4 +1,4 @@
-# from marshmallow import Schema, fields
+from marshmallow import pre_dump, Schema, fields
 from zombie.extensions import ma
 from zombie.blueprints.survivor.models import SurvivorModel
 
